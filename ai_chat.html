@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 专属营养师 - 沉浸式配餐</title>
+    <style>
+        body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; margin: 0; padding: 0; background-color: #f0f2f5; display: flex; height: 100vh; overflow: hidden; }
+
+        /* 左侧聊天区 */
+        .chat-section { flex: 6; display: flex; flex-direction: column; background: white; border-right: 1px solid #e0e0e0; }
+        .chat-header { padding: 20px; background: #4CAF50; color: white; display: flex; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 10; }
+        .back-btn { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 15px; border-radius: 20px; cursor: pointer; margin-right: 15px; font-weight: bold; font-size: 14px; }
+        .chat-history { flex: 1; padding: 20px; overflow-y: auto; background: #f9f9f9; scroll-behavior: smooth; }
+
+        /* 聊天气泡 */
+        .message { margin-bottom: 20px; display: flex; max-width: 85%; }
+        .message.user { margin-left: auto; flex-direction: row-reverse; }
+        .bubble { padding: 12px 18px; border-radius: 18px; line-height: 1.6; font-size: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); word-wrap: break-word; }
+        .user .bubble { background: #4CAF50; color: white; border-top-right-radius: 2px; }
+        .ai .bubble { background: white; color: #333; border-top-left-radius: 2px; border: 1px solid #eee; }
+
+        /* 输入区 */
+        .input-area { padding: 20px; background: white; border-top: 1px solid #eee; display: flex; gap: 10px; }
+        .input-area input { flex: 1; padding: 15px; border: 1px solid #ddd; border-radius: 30px; outline: none; font-size: 15px; transition: all 0.3s; }
+        .input-area input:focus { border-color: #4CAF50; box-shadow: 0 0 5px rgba(76,175,80,0.2); }
+        .input-area button { background: #4CAF50; color: white; border: none; padding: 0 25px; border-radius: 30px; cursor: pointer; font-weight: bold; font-size: 15px; transition: transform 0.1s; }
+        .input-area button:active { transform: scale(0.95); }
+
+        /* 右侧展示区 */
+        .visual-section { flex: 4; background: #fafafa; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
+        .visual-header { text-align: center; color: #666; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px dashed #ddd; }
+
+        /* 套餐分组展示样式 */
+        .combo-group { background: white; border: 1px solid #eee; border-radius: 12px; padding: 15px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+        .combo-title { margin: 0 0 15px 0; color: #4CAF50; font-size: 16px; border-bottom: 1px dashed #ddd; padding-bottom: 8px; font-weight: bold; }
+        .combo-summary { text-align: right; color: #ff5722; font-weight: bold; font-size: 14px; margin-top: 10px; }
+
+        .card { background: white; border-radius: 10px; padding: 10px; margin-bottom: 10px; display: flex; gap: 15px; transition: transform 0.3s; border: 1px solid #f0f0f0; }
+        .card:hover { transform: translateY(-3px); border-color: #4CAF50; }
+        .card img { width: 90px; height: 90px; border-radius: 8px; object-fit: cover; background: #eee; transition: opacity 0.5s ease; }
+        .card-info { flex: 1; position: relative; }
+        .card-info h4 { margin: 0 0 5px 0; color: #333; font-size: 16px; }
+        .tag { display: inline-block; padding: 2px 8px; background: #e8f5e9; color: #4CAF50; border-radius: 10px; font-size: 11px; margin-bottom: 5px; }
+        .price { color: #ff5722; font-weight: bold; font-size: 16px; position: absolute; right: 0; top: 0; }
+        .nutrients { font-size: 12px; color: #888; background: #f5f5f5; padding: 6px; border-radius: 6px; margin-top: 8px; line-height: 1.4; }
+
+        .action-btn { width: 100%; background: #ff9800; color: white; border: none; padding: 12px; border-radius: 10px; font-weight: bold; margin-top: 10px; cursor: pointer; font-size: 16px; display: none; box-shadow: 0 4px 10px rgba(255,152,0,0.3); }
+        .loading { font-style: italic; color: #888; display: flex; align-items: center; gap: 8px; }
+    </style>
+</head>
+<body>
+
+    <div class="chat-section">
+        <div class="chat-header">
+            <button class="back-btn" onclick="goBackHome()">← 返回食堂</button>
+            <h2 style="margin:0; font-size: 18px;">🪄 智慧食堂 AI 营养师 (多模态升级版)</h2>
+        </div>
+
+        <div class="chat-history" id="chatHistory">
+            <div class="message ai">
+                <div class="bubble" id="welcomeBubble">你好！我是你的专属 AI 营养师。已同步今日菜单，准备好为您服务了。<br><br>您可以直接告诉我您的需求，比如：<br>“<strong>帮我搭配一套 30 元左右的减脂三餐方案。</strong>”</div>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <input type="text" id="userInput" placeholder="告诉 AI 你的需求 (例如: 20元 高蛋白)..." onkeypress="handleEnter(event)">
+            <button onclick="sendMessage()">发送</button>
+        </div>
+    </div>
+
+    <div class="visual-section">
+        <div class="visual-header">
+            <h3 style="margin:0;">🍽️ 方案菜品预览</h3>
+            <p style="margin:5px 0 0 0; font-size: 12px;">AI 提到的菜品将按套餐自动呈现卡片</p>
+        </div>
+        <div id="recommendationPanel">
+            <div style="text-align: center; color: #ccc; margin-top: 80px;">
+                <h1 style="font-size: 60px; margin: 0;">🥗</h1>
+                <p>等待 AI 推荐菜品...</p>
+            </div>
+        </div>
+        <button id="addToCartBtn" class="action-btn" onclick="acceptPlan()">采纳此方案并前往点单</button>
+    </div>
+
+    <script>
+
+        const API_BASE_URL = 'http://localhost:5000';
+        let currentMenuData = [];
+        let latestAIItems = [];
+
+        // 🌟 新增：专属当前聊天的临时记忆，关掉网页即失忆
+        let chatCampus = null;
+        let chatFloor = null;
+        let lastFetchedCampus = null;
+        let lastFetchedFloor = null;
+
+        // 初始化：获取当日菜单数据
+        async function fetchMenuData() {
+            const days = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+            const today = days[new Date().getDay()];
+            let url = `${API_BASE_URL}/api/menu?day=${today}`;
+            if (chatCampus) url += `&campus=${chatCampus}`;
+            if (chatFloor) url += `&floor=${chatFloor}`;
+            try {
+                const res = await fetch(url);
+                currentMenuData = await res.json();
+                lastFetchedCampus = chatCampus;
+                lastFetchedFloor = chatFloor;
+                console.log("✅ 菜单库同步成功:", currentMenuData);
+            } catch(e) {
+                console.error("❌ 菜单库同步失败:", e);
+            }
+        }
+
+        window.onload = async () => {
+            await fetchMenuData();
+            // 🌟 页面加载后，自动把欢迎气泡里的称呼替换为用户的昵称
+            const nick = localStorage.getItem('userNickname') || '同学';
+            const welcomeBubble = document.querySelector('.ai .bubble');
+            if (welcomeBubble) {
+                welcomeBubble.innerHTML = welcomeBubble.innerHTML.replace('小钰', nick);
+            }
+        };
+
+        function handleEnter(e) {
+            if (e.key === 'Enter') sendMessage();
+        }
+
+        function appendBubble(role, htmlContent, id = '') {
+            const history = document.getElementById('chatHistory');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+            if(id) msgDiv.id = id;
+            msgDiv.innerHTML = `<div class="bubble">${htmlContent}</div>`;
+            history.appendChild(msgDiv);
+            history.scrollTop = history.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const inputEl = document.getElementById('userInput');
+            const text = inputEl.value.trim();
+            if (!text) return;
+
+            appendBubble('user', text);
+            inputEl.value = '';
+
+            const loadingId = 'loading-' + Date.now();
+            appendBubble('ai', '<span class="loading">🤖 AI 助手正在极速测算并构思方案...</span>', loadingId);
+
+            const days = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+            const today = days[new Date().getDay()];
+
+            // 🌟 核心：从用户这句聊天中提取位置，存入“临时记忆”(网页关掉就忘)
+            if (text.includes("北区")) chatCampus = "北区";
+            else if (text.includes("南区")) chatCampus = "南区";
+            else if (text.includes("西区")) chatCampus = "西区";
+
+            if (text.includes("一楼")) chatFloor = "一楼";
+            else if (text.includes("二楼")) chatFloor = "二楼";
+
+            try {
+                if (currentMenuData.length === 0 || chatCampus !== lastFetchedCampus || chatFloor !== lastFetchedFloor) await fetchMenuData();
+
+                const res = await fetch(`${API_BASE_URL}/api/ai_plan`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    // 🌟 关键：把位置信息一起打包发给后端
+                    // 🌟 增加 nickname 参数，打包发给后端
+                    body: JSON.stringify({
+                        text: text,
+                        day: today,
+                        campus: chatCampus,
+                        floor: chatFloor,
+                        nickname: localStorage.getItem('userNickname') || '同学'
+                    })
+                });
+                const data = await res.json();
+
+                document.getElementById(loadingId).remove();
+
+                if (data.status === 'success') {
+                    let formattedReason = data.reason.replace(/\n/g, '<br>');
+                    appendBubble('ai', formattedReason);
+                    renderComboCards(data.combos);
+                } else {
+                    appendBubble('ai', `⚠️ 助手遇到了一点小麻烦：${data.message}`);
+                }
+            } catch (err) {
+                if(document.getElementById(loadingId)) document.getElementById(loadingId).remove();
+                appendBubble('ai', `❌ 无法连接到 AI 大脑，请确认后端服务器已启动。`);
+            }
+        }
+
+        // 🌟 核心渲染：支持套餐分组与异步画图
+        // 🌟 核心渲染：支持套餐分组与本地图片智能兜底
+        function renderComboCards(combos) {
+            const panel = document.getElementById('recommendationPanel');
+            const actionBtn = document.getElementById('addToCartBtn');
+            panel.innerHTML = '';
+
+            latestAIItems = [];
+            if (combos && combos.length > 0) {
+                combos.forEach(combo => {
+                    if(combo.items) latestAIItems.push(...combo.items);
+                });
+            }
+
+            if (!combos || combos.length === 0) {
+                panel.innerHTML = '<p style="text-align:center; color:#999; margin-top:50px;">未提取到具体菜品，您可以换个说法让 AI 重新推荐。</p>';
+                actionBtn.style.display = 'none';
+                return;
+            }
+
+            let globalTotalPrice = 0;
+            let globalTotalCal = 0;
+            let hasValidDish = false;
+
+            combos.forEach(combo => {
+                let subTotal = 0;
+                let subCal = 0;
+                let cardsHtml = '';
+
+                if (combo.items && combo.items.length > 0) {
+                    combo.items.forEach(item => {
+                        hasValidDish = true;
+                        subTotal += item.price || 0;
+                        subCal += item.calories || 0;
+                        globalTotalPrice += item.price || 0;
+                        globalTotalCal += item.calories || 0;
+
+                        // 🌟 完美修复：将中文进行安全编码，并使用无引号冲突的 URL 作为兜底
+                        let safeName = encodeURIComponent(item.name);
+                        let imgSrc = `${API_BASE_URL}/static/images/${item.name}.jpg`;
+                        let fallbackUrl = `https://ui-avatars.com/api/?name=${safeName}&background=random&color=fff&size=200&font-size=0.3`;
+
+                        // ⚠️ 这里补全了之前漏掉的反引号和价格热量等 HTML 结构！
+                        cardsHtml += `
+                            <div class="card" style="box-shadow: none; border: 1px solid #f0f0f0;">
+                                <img id="img-${item.id || item.name}" src="${imgSrc}" onerror="this.onerror=null; this.src='${fallbackUrl}';" alt="${item.name}" title="${item.name}">
+                                <div class="card-info">
+                                    <span class="price">¥${item.price ? item.price.toFixed(1) : "0.0"}</span>
+                                    <h4>${item.name}</h4>
+                                    <div class="nutrients">🔥 热量: ${item.calories || 0} kcal</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+
+                if (cardsHtml !== '') {
+                    panel.innerHTML += `
+                        <div class="combo-group">
+                            <h4 class="combo-title">🏷️ ${combo.name}</h4>
+                            ${cardsHtml}
+                            <div class="combo-summary">此方案小计: ¥${subTotal.toFixed(1)} | ${subCal} kcal</div>
+                        </div>
+                    `;
+                }
+            });
+
+            if (hasValidDish) {
+                panel.innerHTML = `
+                    <div style="background:#e8f5e9; padding:12px; border-radius:12px; margin-bottom:20px; color:#2e7d32; font-weight:bold; text-align:center; border: 1px solid #c8e6c9;">
+                        📊 方案总计：¥${globalTotalPrice.toFixed(1)} | ${globalTotalCal} kcal
+                    </div>
+                ` + panel.innerHTML;
+                actionBtn.style.display = 'block';
+            }
+        }
+
+        async function generateImageForDish(id, name) {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/generate_image`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    const imgElement = document.getElementById(`img-${id}`);
+                    if (imgElement) {
+                        imgElement.style.opacity = 0;
+                        imgElement.src = data.image_url;
+                        imgElement.onload = () => imgElement.style.opacity = 1;
+                    }
+                    const menuItem = currentMenuData.find(i => Number(i.id) === Number(id));
+                    if(menuItem) menuItem.image = data.image_url;
+                } else {
+                    const errorSvg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%23ffebee"/><text x="50" y="50" font-family="Arial" font-size="12" fill="%23f44336" text-anchor="middle" dominant-baseline="middle">生成失败</text></svg>`;
+                    const imgElement = document.getElementById(`img-${id}`);
+                    if (imgElement) {
+                        imgElement.src = errorSvg;
+                        imgElement.title = `报错原因: ${data.message}`;
+                    }
+                }
+            } catch(e) {
+                console.error(`绘图错误:`, e);
+            }
+        }
+
+        // ================= 🌟 高级毛玻璃采纳通知 =================
+        function acceptPlan() {
+            // 🌟 新增核心：在页面跳转毁灭前，把包裹死死存进浏览器的本地仓库里！
+            if (latestAIItems.length > 0) {
+                localStorage.setItem('aiPendingOrder', JSON.stringify(latestAIItems));
+            }
+
+            // 1. 创建全屏毛玻璃遮罩层
+            const overlay = document.createElement('div');
+            // ... (下方原有代码保持不变)
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                background: rgba(255, 255, 255, 0.3); /* 极浅的背景 */
+                backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); /* 核心毛玻璃特效 */
+                display: flex; justify-content: center; align-items: center;
+                z-index: 99999; opacity: 0; transition: opacity 0.4s ease;
+            `;
+
+            // 2. 创建居中的通知卡片
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                background: rgba(255, 255, 255, 0.9);
+                padding: 40px 50px; border-radius: 24px;
+                box-shadow: 0 20px 40px rgba(0,0,0,0.08); border: 1px solid rgba(255,255,255,0.8);
+                text-align: center; max-width: 350px;
+                transform: scale(0.8) translateY(20px); /* 初始缩小并稍微靠下 */
+                transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* 弹簧动画效果 */
+            `;
+
+            modal.innerHTML = `
+                <div style="font-size: 50px; margin-bottom: 15px; animation: float 2s ease-in-out infinite;">🎉</div>
+                <h3 style="margin: 0 0 10px 0; color: #2e7d32; font-size: 22px; font-weight: bold;">方案已采纳！</h3>
+                <p style="margin: 0 0 25px 0; color: #666; font-size: 15px; line-height: 1.6;">AI 营养师已将您的专属菜单同步至餐盘，正在为您跳转...</p>
+
+                <div style="display: flex; justify-content: center; gap: 8px;">
+                    <div class="dot" style="width:10px; height:10px; background:#4CAF50; border-radius:50%; animation: bounce 1.4s infinite ease-in-out both;"></div>
+                    <div class="dot" style="width:10px; height:10px; background:#4CAF50; border-radius:50%; animation: bounce 1.4s infinite ease-in-out both; animation-delay: -0.32s;"></div>
+                    <div class="dot" style="width:10px; height:10px; background:#4CAF50; border-radius:50%; animation: bounce 1.4s infinite ease-in-out both; animation-delay: -0.16s;"></div>
+                </div>
+            `;
+
+            // 3. 动态注入关键帧动画 (用于图标悬浮和加载点点跳动)
+            const style = document.createElement('style');
+            style.innerHTML = `
+                @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+                @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+            `;
+            document.head.appendChild(style);
+
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            // 4. 触发出现动画
+            // 4. 触发出现动画
+            setTimeout(() => {
+                overlay.style.opacity = '1';
+                modal.style.transform = 'scale(1) translateY(0)';
+            }, 10);
+
+            // 5. 🌟 核心修改：在遮罩变浓后的 500ms（视觉最模糊时），立刻发起跳转
+            // 这样浏览器会在模糊的背景下加载 index.html，用户完全感觉不到页面的硬切换
+            setTimeout(() => {
+                console.log("🤫 正在模糊遮罩下偷偷跳转...");
+                window.location.href = 'index.html';
+            }, 500);
+
+            // 原来的 2500ms 延迟和 opacity: 0 逻辑全部删掉，因为跳转会自动销毁当前页
+        }
+
+        // ================= 🌟 从 AI 界面退回食堂的动画 =================
+        function goBackHome() {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                background: rgba(255, 255, 255, 0.3); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+                display: flex; justify-content: center; align-items: center; z-index: 99999; opacity: 0; transition: opacity 0.4s ease;
+            `;
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                background: rgba(255, 255, 255, 0.9); padding: 40px 50px; border-radius: 24px;
+                box-shadow: 0 20px 40px rgba(0,0,0,0.08); border: 1px solid rgba(255,255,255,0.8);
+                text-align: center; max-width: 350px; transform: scale(0.8) translateY(20px);
+                transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            `;
+            modal.innerHTML = `
+                <div style="font-size: 50px; margin-bottom: 15px; animation: float 2s ease-in-out infinite;">🏠</div>
+                <h3 style="margin: 0 0 10px 0; color: #2e7d32; font-size: 22px; font-weight: bold;">返回食堂</h3>
+                <p style="margin: 0 0 25px 0; color: #666; font-size: 15px;">正在退出 AI 沉浸空间...</p>
+                <div style="display: flex; justify-content: center; gap: 8px;">
+                    <div class="dot" style="width:10px; height:10px; background:#4CAF50; border-radius:50%; animation: bounce 1.4s infinite ease-in-out both;"></div>
+                    <div class="dot" style="width:10px; height:10px; background:#4CAF50; border-radius:50%; animation: bounce 1.4s infinite ease-in-out both; animation-delay: -0.32s;"></div>
+                    <div class="dot" style="width:10px; height:10px; background:#4CAF50; border-radius:50%; animation: bounce 1.4s infinite ease-in-out both; animation-delay: -0.16s;"></div>
+                </div>
+            `;
+            if (!document.getElementById('transition-styles')) {
+                const style = document.createElement('style');
+                style.id = 'transition-styles';
+                style.innerHTML = `@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } } @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }`;
+                document.head.appendChild(style);
+            }
+            overlay.appendChild(modal); document.body.appendChild(overlay);
+            setTimeout(() => { overlay.style.opacity = '1'; modal.style.transform = 'scale(1) translateY(0)'; }, 10);
+
+            // 延迟 1 秒后返回首页
+            // 1. 遮罩入场
+            setTimeout(() => { overlay.style.opacity = '1'; modal.style.transform = 'scale(1) translateY(0)'; }, 10);
+
+            // 2. 🌟 核心魔术：在遮罩最浓时（400ms）立刻发起页面跳转！
+            // 浏览器会在带着毛玻璃的状态下加载 index.html，完美掩盖白屏
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 400);
+
+            // 注意：因为跨页面跳转会直接销毁当前页面，所以这里连“退场动画”都不需要写了！
+        }
+    </script>
+</body>
+</html>
