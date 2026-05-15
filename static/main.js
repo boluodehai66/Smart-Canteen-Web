@@ -595,7 +595,7 @@ document.getElementById('pfWeight').addEventListener('input', calculateHealthDat
 document.getElementById('pfFatRate').addEventListener('input', calculateHealthData);
 
 async function saveProfile() {
-    // 提取你页面上填写的健康数据
+    // 1. 提取页面上的数据
     const gender = document.getElementById('pfGender').value;
     const age = document.getElementById('pfAge').value;
     const height = document.getElementById('pfHeight').value;
@@ -603,8 +603,9 @@ async function saveProfile() {
     const bodyFat = document.getElementById('pfFatRate').value;
     const nickname = document.getElementById('pfNickname').value;
     const realName = document.getElementById('pfRealName').value;
+    const bmr = parseInt(document.getElementById('calcBMR').innerText) || 1800;
 
-    // 🌟 存入本地记忆，这样不管怎么刷新页面，你的身体数据都在
+    // 2. 先存入本地记忆 (LocalStorage) 保证体验流畅
     localStorage.setItem('userNickname', nickname);
     localStorage.setItem('userName', realName);
     localStorage.setItem('userGender', gender);
@@ -613,23 +614,41 @@ async function saveProfile() {
     localStorage.setItem('userWeight', weight);
     localStorage.setItem('userBodyFat', bodyFat);
 
-    // 同步更新当前用户的变量
+    // 3. 🌟 发起网络请求同步到数据库
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/update_profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                studentId: currentUser.studentId,
+                name: realName,
+                gender: gender,
+                age: parseInt(age),
+                height: parseFloat(height),
+                weight: parseFloat(weight),
+                bodyFat: parseFloat(bodyFat),
+                bmr: bmr
+            })
+        });
 
+        const data = await response.json();
 
-    if (currentUser) {
-        currentUser.name = realName;
-        currentUser.nickname = nickname;
-        currentUser.gender = gender;
-        currentUser.age = age;
-        currentUser.height = height;
-        currentUser.weight = weight;
-        currentUser.bodyFat = bodyFat;
-        calculateHealthData(); // 更新你的健康分析展示
+        if (data.status === 'success') {
+            // 同步更新内存中的变量
+            if (currentUser) {
+                currentUser.name = realName;
+                currentUser.height = height;
+                currentUser.weight = weight;
+            }
+            await customAlert("✅ 同步成功", "您的健康档案已同步至云端数据库！");
+            goHome();
+        } else {
+            customAlert("❌ 同步失败", data.message);
+        }
+    } catch (err) {
+        console.error("同步失败:", err);
+        customAlert("⚠️ 本地已保存", "云端同步失败（网络问题），数据暂存本设备。");
     }
-
-    // 完美调用你自己的自定义弹窗
-    await customAlert("✅ 保存成功", "您的个人健康档案已成功保存！");
-    goHome(); // 安全退回点餐主页面
 }
 
 async function triggerPasswordChange() {

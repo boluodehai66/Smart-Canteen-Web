@@ -65,10 +65,16 @@ db = SQLAlchemy(app)
 # =====================================================================
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.String(50), unique=True, nullable=False)  # 补全学号
-    name = db.Column(db.String(80), nullable=False)  # 修正为 name
+    student_id = db.Column(db.String(50), unique=True, nullable=False)
+    name = db.Column(db.String(80), nullable=False)
     password = db.Column(db.String(120), nullable=False)
-    balance = db.Column(db.Float, default=100.0)  # 补全余额
+    balance = db.Column(db.Float, default=100.0)
+    # 🌟 新增以下健康字段
+    gender = db.Column(db.String(10))
+    age = db.Column(db.Integer)
+    height = db.Column(db.Float)
+    weight = db.Column(db.Float)
+    body_fat = db.Column(db.Float)
     bmr = db.Column(db.Integer, default=1800)
     goal = db.Column(db.String(100), default="保持健康")
 
@@ -132,6 +138,32 @@ def login():
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'后端报错: {str(e)}'}), 200
 
+@app.route('/api/change_password', methods=['POST'])
+def change_password():
+    try:
+        data = request.json
+        student_id = data.get('studentId')
+        old_password = data.get('oldPassword')
+        new_password = data.get('newPassword')
+
+        if not student_id or not old_password or not new_password:
+            return jsonify({"status": "error", "message": "信息不完整"}), 200
+
+        user = User.query.filter_by(student_id=student_id).first()
+        if not user:
+            return jsonify({"status": "error", "message": "找不到该学生信息"}), 200
+
+        # 校验原密码
+        if user.password != old_password:
+            return jsonify({"status": "error", "message": "原密码输入错误！"}), 200
+
+        # 修改为新密码
+        user.password = new_password
+        db.session.commit()
+        return jsonify({"status": "success", "message": "密码修改成功！"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 200
+
 
 @app.route('/api/update_profile', methods=['POST'])
 def update_profile():
@@ -143,16 +175,35 @@ def update_profile():
 
         user = User.query.filter_by(student_id=student_id).first()
         if not user:
-            return jsonify({'status': 'error', 'message': '在数据库中找不到该用户'}), 200
+            return jsonify({'status': 'error', 'message': '找不到该用户'}), 200
 
-        if 'name' in data and data['name']: user.name = data['name']
-        if 'password' in data and data['password']: user.password = data['password']
+        # 更新基本信息
+        if 'name' in data: user.name = data['name']
+
+        # 更新健康体测数据
+        user.gender = data.get('gender', user.gender)
+        user.age = data.get('age', user.age)
+        user.height = data.get('height', user.height)
+        user.weight = data.get('weight', user.weight)
+        user.body_fat = data.get('bodyFat', user.body_fat)
+
+        # 如果前端传了计算好的 BMR，也可以同步
+        if 'bmr' in data: user.bmr = data['bmr']
 
         db.session.commit()
-        return jsonify({'status': 'success', 'message': '档案保存成功！',
-                        'user': {'id': user.id, 'name': user.name, 'balance': user.balance}})
+        return jsonify({
+            'status': 'success',
+            'message': '云端档案保存成功！',
+            'user': {
+                'name': user.name,
+                'balance': user.balance,
+                'height': user.height,
+                'weight': user.weight
+            }
+        })
     except Exception as e:
-        return jsonify({'status': 'error', 'message': f'后端报错: {str(e)}'}), 200
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': f'后端更新失败: {str(e)}'}), 200
 
 
 @app.route('/api/analyze_dish', methods=['POST'])
@@ -410,6 +461,6 @@ def ai_plan():
 
 
 if __name__ == '__main__':
-    # Render 会通过环境变量提供 PORT，如果没有则默认 10000
-    port = int(os.environ.get("PORT", 10000))
+    # 为了适配本地 ngrok 习惯，默认退回 5000 端口
+    port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
