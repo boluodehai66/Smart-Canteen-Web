@@ -1,7 +1,7 @@
 import os
 import traceback
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from openai import OpenAI
@@ -41,6 +41,15 @@ def init_ai_model():
 
 app = Flask(__name__)
 CORS(app)
+
+@app.route('/ai-chat')
+def ai_chat_page():
+    return render_template('ai_chat.html')
+
+@app.route('/')
+def index():
+    # 这行代码会自动去 templates 文件夹里找 index.html
+    return render_template('index.html')
 
 user_memory = {"campus": None, "floor": None}
 
@@ -88,6 +97,10 @@ class OrderHistory(db.Model):
     total_price = db.Column(db.Float, nullable=False)
     date = db.Column(db.String(50), nullable=False)
 
+
+# 自动创建数据库表（如果不存在）
+with app.app_context():
+    db.create_all()
 
 # =====================================================================
 # 🌟 3. 基础功能接口
@@ -162,14 +175,17 @@ def analyze_dish():
 
 @app.route('/api/menu', methods=['GET'])
 def get_menu():
-    day = request.args.get('day', '周一')
-    campus = request.args.get('campus', '北区')
-    floor = request.args.get('floor', '一楼')
-    items = MenuItem.query.filter_by(day=day, campus=campus, floor=floor).all()
-    menu_data = [
-        {"id": i.id, "name": i.name, "price": i.price, "calories": i.calories, "carbs": i.carbs, "protein": i.protein,
-         "fat": i.fat, "category": i.category, "image": i.image} for i in items]
-    return jsonify(menu_data)
+    try:
+        day = request.args.get('day', '周一')
+        campus = request.args.get('campus', '北区')
+        floor = request.args.get('floor', '一楼')
+        items = MenuItem.query.filter_by(day=day, campus=campus, floor=floor).all()
+        menu_data = [
+            {"id": i.id, "name": i.name, "price": i.price, "calories": i.calories, "carbs": i.carbs, "protein": i.protein,
+             "fat": i.fat, "category": i.category, "image": i.image} for i in items]
+        return jsonify(menu_data)
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"菜单加载失败: {str(e)}"}), 500
 
 
 # 🌟 修复：改用智谱 CogView，彻底解决 403 问题
@@ -394,7 +410,6 @@ def ai_plan():
 
 
 if __name__ == '__main__':
-    # 建立上下文以确保表存在（自动创建新表结构）
-    with app.app_context():
-        db.create_all()
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    # Render 会通过环境变量提供 PORT，如果没有则默认 10000
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)

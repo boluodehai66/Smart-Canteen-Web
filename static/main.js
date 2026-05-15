@@ -1,5 +1,5 @@
 // ================= 全局状态管理 =================
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = window.location.origin;
 
 let cart = {};
 let previewCart = {};
@@ -154,14 +154,23 @@ function fetchMenu(day) {
 
     // 🌟 核心修改：向本地 Python 接口请求时，带上校区和楼层参数！
     fetch(`${API_BASE_URL}/api/menu?day=${day}&campus=${currentCampus}&floor=${currentFloor}`)
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) {
+                return res.json().then(data => {
+                    throw new Error(data.message || `HTTP ${res.status}`);
+                }).catch(() => {
+                    throw new Error(`HTTP ${res.status} 服务器错误`);
+                });
+            }
+            return res.json();
+        })
         .then(data => {
             currentMenuData = data;
             renderMenu(data);
         })
         .catch(err => {
             console.error(err);
-            customAlert("❌ 错误", "无法连接到本地数据库，请确保 Python 后端已启动！");
+            customAlert("❌ 错误", err.message || "无法连接到后端，请确保 Python 后端已启动！");
         });
 }
 
